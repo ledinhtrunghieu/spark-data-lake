@@ -84,10 +84,37 @@ def create_emr_cluster(emr_client, config):
         ],
         VisibleToAllUsers=True,
         JobFlowRole='EMR_EC2_DefaultRole',
-        ServiceRole='myRedshiftRole'
+        ServiceRole='MyEmrRole'
     )
 
     print('cluster created with the step...', cluster_id['JobFlowId'])
+
+
+def create_iam_role(iam_client):
+    role = iam_client.create_role(
+        RoleName='MyEmrRole',
+        Description='Allows EMR to call AWS services on your behalf',
+        AssumeRolePolicyDocument=json.dumps({
+            'Version': '2012-10-17',
+            'Statement': [{
+                'Action': 'sts:AssumeRole',
+                'Effect': 'Allow',
+                'Principal': {'Service': 'elasticmapreduce.amazonaws.com'}
+            }]
+        })
+    )
+
+    iam_client.attach_role_policy(
+        RoleName='MyEmrRole',
+        PolicyArn='arn:aws:iam::aws:policy/AmazonS3FullAccess'
+    )
+
+    iam_client.attach_role_policy(
+        RoleName='MyEmrRole',
+        PolicyArn='arn:aws:iam::aws:policy/service-role/AmazonElasticMapReduceRole'
+    )
+
+    return role
 
 
 
@@ -106,6 +133,10 @@ def main():
     create_bucket(s3_client, config['S3']['OUTPUT_BUCKET'])
     create_bucket(s3_client, config['S3']['CODE_BUCKET'])
     upload_code(s3_client, 'etl.py', config['S3']['CODE_BUCKET'])
+
+    # iam_client = boto3.client('iam')
+    # create_iam_role(iam_client)
+
 
     emr_client = boto3.client(
             'emr',
