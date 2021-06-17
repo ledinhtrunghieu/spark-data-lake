@@ -23,30 +23,32 @@ def create_spark_session():
 
 def process_song_data(spark, input_data, output_data):
     # get filepath to song data file
-    song_data = 
+    song_data = song_data = os.path.join(input_data, 'song_data/*/*/*/*.json')
     
     # read song data file
-    df = 
+    df =  spark.read.json(song_data)
 
     # extract columns to create songs table
-    songs_table = 
+    songs_table = df['song_id', 'title', 'artist_id', 'year', 'duration']
     
     # write songs table to parquet files partitioned by year and artist
-    songs_table
+    songs_table.withColumn('_year', df.year).withColumn('_artist_id', df.artist_id) \
+        .write.partitionBy(['_year', '_artist_id']).parquet(os.path.join(output_data, 'songs'), 'overwrite') 
 
     # extract columns to create artists table
-    artists_table = 
+    rtists_table = df['artist_id', 'artist_name', 'artist_location', 'artist_latitude', 'artist_longitude']
+    artists_table = artists_table.drop_duplicates(subset=['artist_id'])
     
     # write artists table to parquet files
-    artists_table
+    artists_table.write.parquet(os.path.join(output_data, 'artists'), 'overwrite')
 
 
 def process_log_data(spark, input_data, output_data):
     # get filepath to log data file
-    log_data =
+    log_data = os.path.join(input_data, 'log_data/*/*/*.json')
 
     # read log data file
-    df = 
+    df = spark.read.json(log_data) 
     
     # filter by actions for song plays
     df = 
@@ -83,8 +85,9 @@ def process_log_data(spark, input_data, output_data):
 
 def main():
     spark = create_spark_session()
-    input_data = "s3a://udacity-dend/"
-    output_data = ""
+
+    input_data = config['DATALAKE']['INPUT_DATA']
+    output_data = config['DATALAKE']['OUTPUT_DATA']
     
     process_song_data(spark, input_data, output_data)    
     process_log_data(spark, input_data, output_data)

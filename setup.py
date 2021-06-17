@@ -11,6 +11,86 @@ def upload_code(s3_client, file_name, bucket_name):
     s3_client.upload_file(file_name, bucket_name, 'etl.py')
 
 
+def create_emr_cluster(emr_client, config):
+    cluster_id = emr_client.run_job_flow(
+        Name='hieu-spark-cluster',
+        ReleaseLabel='emr-5.33.0',
+        LogUri='s3://aws-logs-594695117986-us-west-2',
+        Applications=[
+            {
+                'Name': 'Spark'
+            },
+        ],
+        Configurations=[
+            {
+                "Classification": "spark-env",
+                "Configurations": [
+                    {
+                        "Classification": "export",
+                        "Properties": {
+                            "PYSPARK_PYTHON": "/usr/bin/python3"
+                        }
+                    }
+                ]
+            }
+        ],
+        Instances={
+            'InstanceGroups': [
+                {
+                    'Name': "Master nodes",
+                    'Market': 'ON_DEMAND',
+                    'InstanceRole': 'MASTER',
+                    'InstanceType': 'm5.xlarge',
+                    'InstanceCount': 1,
+                },
+                {
+                    'Name': "Slave nodes",
+                    'Market': 'ON_DEMAND',
+                    'InstanceRole': 'CORE',
+                    'InstanceType': 'm5.xlarge',
+                    'InstanceCount': 3,
+                }
+            ],
+            'KeepJobFlowAliveWhenNoSteps': False,
+            'TerminationProtected': False,
+        },
+        Steps=[
+            {
+                'Name': 'Setup Debugging',
+                'ActionOnFailure': 'TERMINATE_CLUSTER',
+                'HadoopJarStep': {
+                    'Jar': 'command-runner.jar',
+                    'Args': ['state-pusher-script']
+                }
+            },
+            {
+                'Name': 'Setup - copy files',
+                'ActionOnFailure': 'CANCEL_AND_WAIT',
+                'HadoopJarStep': {
+                    'Jar': 'command-runner.jar',
+                    'Args': ['aws', 's3', 'cp', 's3://' + config['S3']['CODE_BUCKET'], '/home/hadoop/',
+                             '--recursive']
+                }
+            },
+            {
+                'Name': 'Run Spark',
+                'ActionOnFailure': 'CANCEL_AND_WAIT',
+                'HadoopJarStep': {
+                    'Jar': 'command-runner.jar',
+                    'Args': ['spark-submit', '/home/hadoop/etl.py',
+                             config['DATALAKE']['INPUT_DATA'], config['DATALAKE']['OUTPUT_DATA']]
+                }
+            }
+        ],
+        VisibleToAllUsers=True,
+        JobFlowRole='EMR_EC2_DefaultRole',
+        ServiceRole='myRedshiftRole'
+    )
+
+    print('cluster created with the step...', cluster_id['JobFlowId'])
+
+
+
 
 def main():
     config = configparser.ConfigParser()
@@ -27,7 +107,14 @@ def main():
     create_bucket(s3_client, config['S3']['CODE_BUCKET'])
     upload_code(s3_client, 'etl.py', config['S3']['CODE_BUCKET'])
 
-
+    emr_client = boto3.client(
+            'emr',
+            region_name='us-west-2',
+            aws_access_key_id=config['AWS']['AWS_ACCESS_KEY_ID'],
+            aws_secret_access_key=config['AWS']['AWS_SECRET_ACCESS_KEY']
+        )
+    
+    create_emr_cluster(emr_client, config)
 
 
 if __name__ == '__main__':
