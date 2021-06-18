@@ -15,10 +15,19 @@ def create_emr_cluster(emr_client, config):
     cluster_id = emr_client.run_job_flow(
         Name='hieu-spark-cluster',
         ReleaseLabel='emr-5.33.0',
-        LogUri='s3://aws-logs-594695117986-us-west-2',
+        LogUri='s3://aws-logs-594695117986-us-west-2/elasticmapreduce/',
         Applications=[
             {
                 'Name': 'Spark'
+            },
+            {
+                'Name': 'Zeppelin'
+            },
+            {
+                'Name': 'JupyterHub'
+            },
+            {
+                'Name': 'JupyterEnterpriseGateway'
             },
         ],
         Configurations=[
@@ -35,6 +44,8 @@ def create_emr_cluster(emr_client, config):
             }
         ],
         Instances={
+            'Ec2SubnetId': 'subnet-b6c56afc',
+            'Ec2KeyName': 'spark-cluster',
             'InstanceGroups': [
                 {
                     'Name': "Master nodes",
@@ -84,7 +95,7 @@ def create_emr_cluster(emr_client, config):
         ],
         VisibleToAllUsers=True,
         JobFlowRole='EMR_EC2_DefaultRole',
-        ServiceRole='MyEmrRole'
+        ServiceRole='EMR_DefaultRole'
     )
 
     print('cluster created with the step...', cluster_id['JobFlowId'])
@@ -130,9 +141,9 @@ def main():
         aws_secret_access_key=config['AWS']['AWS_SECRET_ACCESS_KEY'],
     )
 
-    create_bucket(s3_client, config['S3']['OUTPUT_BUCKET'])
-    create_bucket(s3_client, config['S3']['CODE_BUCKET'])
-    upload_code(s3_client, 'etl.py', config['S3']['CODE_BUCKET'])
+    # create_bucket(s3_client, config['S3']['OUTPUT_BUCKET'])
+    # create_bucket(s3_client, config['S3']['CODE_BUCKET'])
+    # upload_code(s3_client, 'etl.py', config['S3']['CODE_BUCKET'])
 
     # iam_client = boto3.client('iam')
     # create_iam_role(iam_client)
