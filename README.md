@@ -32,7 +32,7 @@ songplays - records in log data associated with song plays i.e. records with pag
 3. artists - artists in music database
     * artist_id, name, location, lattitude, longitude
 4. time - timestamps of records in songplays broken down into specific units
-    *start_time, hour, day, week, month, year, weekday
+    * start_time, hour, day, week, month, year, weekday
 
 ## 4. Instruction to run
 
