@@ -143,7 +143,7 @@ def main():
 
     # create_bucket(s3_client, config['S3']['OUTPUT_BUCKET'])
     # create_bucket(s3_client, config['S3']['CODE_BUCKET'])
-    # upload_code(s3_client, 'etl.py', config['S3']['CODE_BUCKET'])
+    upload_code(s3_client, 'etl.py', config['S3']['CODE_BUCKET'])
 
     # iam_client = boto3.client('iam')
     # create_iam_role(iam_client)
