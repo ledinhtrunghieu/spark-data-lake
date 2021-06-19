@@ -3,15 +3,37 @@ import configparser
 import json
 
 def create_bucket(s3_client, bucket_name):
+    """Creates a bucket on AWS S3.
+    Args:
+        s3_client: S3 Client
+        bucket_name: Name of the bucket
+    Returns:
+        None
+    """
     location = {'LocationConstraint': 'us-west-2'}
     s3_client.create_bucket(Bucket=bucket_name, CreateBucketConfiguration=location)
 
 
-def upload_code(s3_client, file_name, bucket_name):
+def upload_etl(s3_client, file_name, bucket_name):
+    """Upload ETL file to run on AWS.
+    Args:
+        s3_client: S3 Client
+        file_name: The ETL file
+        bucket_name: Name of the bucket
+    Returns:
+        None
+    """
     s3_client.upload_file(file_name, bucket_name, 'etl.py')
 
 
 def create_emr_cluster(emr_client, config):
+    """Creates a EMR Cluster AWS S3.
+    Args:
+        emr_client: EMR Client
+        config: Configuration file
+    Returns:
+        None
+    """
     cluster_id = emr_client.run_job_flow(
         Name='hieu-spark-cluster',
         ReleaseLabel='emr-5.33.0',
@@ -79,7 +101,7 @@ def create_emr_cluster(emr_client, config):
                 'ActionOnFailure': 'CANCEL_AND_WAIT',
                 'HadoopJarStep': {
                     'Jar': 'command-runner.jar',
-                    'Args': ['aws', 's3', 'cp', 's3://' + config['S3']['CODE_BUCKET'], '/home/hadoop/',
+                    'Args': ['aws', 's3', 'cp', 's3://' + config['BUCKET']['CODE_BUCKET'], '/home/hadoop/',
                              '--recursive']
                 }
             },
@@ -89,49 +111,26 @@ def create_emr_cluster(emr_client, config):
                 'HadoopJarStep': {
                     'Jar': 'command-runner.jar',
                     'Args': ['spark-submit', '/home/hadoop/etl.py',
-                             config['DATALAKE']['INPUT_DATA'], config['DATALAKE']['OUTPUT_DATA']]
+                             config['S3']['INPUT_DATA'], config['S3']['OUTPUT_DATA']]
                 }
             }
         ],
         VisibleToAllUsers=True,
         JobFlowRole='EMR_EC2_DefaultRole',
-        ServiceRole='EMR_DefaultRole'
+        ServiceRole='HieuLeEmrRole'
     )
-
-    print('cluster created with the step...', cluster_id['JobFlowId'])
-
-
-def create_iam_role(iam_client):
-    role = iam_client.create_role(
-        RoleName='MyEmrRole',
-        Description='Allows EMR to call AWS services on your behalf',
-        AssumeRolePolicyDocument=json.dumps({
-            'Version': '2012-10-17',
-            'Statement': [{
-                'Action': 'sts:AssumeRole',
-                'Effect': 'Allow',
-                'Principal': {'Service': 'elasticmapreduce.amazonaws.com'}
-            }]
-        })
-    )
-
-    iam_client.attach_role_policy(
-        RoleName='MyEmrRole',
-        PolicyArn='arn:aws:iam::aws:policy/AmazonS3FullAccess'
-    )
-
-    iam_client.attach_role_policy(
-        RoleName='MyEmrRole',
-        PolicyArn='arn:aws:iam::aws:policy/service-role/AmazonElasticMapReduceRole'
-    )
-
-    return role
-
-
 
 
 def main():
+    """Main Script to setup the cluster and bucket
+    Args:
+        None
+        
+    Returns:
+        None
+    """
     config = configparser.ConfigParser()
+
     config.read('dl.cfg')
 
     s3_client = boto3.client(
@@ -141,13 +140,11 @@ def main():
         aws_secret_access_key=config['AWS']['AWS_SECRET_ACCESS_KEY'],
     )
 
-    # create_bucket(s3_client, config['S3']['OUTPUT_BUCKET'])
-    # create_bucket(s3_client, config['S3']['CODE_BUCKET'])
-    upload_code(s3_client, 'etl.py', config['S3']['CODE_BUCKET'])
+    create_bucket(s3_client, config['BUCKET']['OUTPUT_BUCKET'])
+    
+    create_bucket(s3_client, config['BUCKET']['CODE_BUCKET'])
 
-    # iam_client = boto3.client('iam')
-    # create_iam_role(iam_client)
-
+    upload_etl(s3_client, 'etl.py', config['BUCKET']['CODE_BUCKET'])
 
     emr_client = boto3.client(
             'emr',
