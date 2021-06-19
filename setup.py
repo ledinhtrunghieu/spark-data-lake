@@ -81,7 +81,7 @@ def create_emr_cluster(emr_client, config):
                     'Market': 'ON_DEMAND',
                     'InstanceRole': 'CORE',
                     'InstanceType': 'm5.xlarge',
-                    'InstanceCount': 3,
+                    'InstanceCount': 4,
                 }
             ],
             'KeepJobFlowAliveWhenNoSteps': False,
@@ -96,6 +96,24 @@ def create_emr_cluster(emr_client, config):
                     'Args': ['state-pusher-script']
                 }
             },
+            {
+                'Name': 'Setup - copy files',
+                'ActionOnFailure': 'CANCEL_AND_WAIT',
+                'HadoopJarStep': {
+                    'Jar': 'command-runner.jar',
+                    'Args': ['aws', 's3', 'cp', 's3://' + config['BUCKET']['CODE_BUCKET'], '/home/hadoop/',
+                             '--recursive']
+                }
+            },
+            {
+                'Name': 'Run Spark',
+                'ActionOnFailure': 'CANCEL_AND_WAIT',
+                'HadoopJarStep': {
+                    'Jar': 'command-runner.jar',
+                    'Args': ['spark-submit', '/home/hadoop/etl.py',
+                             config['S3']['INPUT_DATA'], config['S3']['OUTPUT_DATA']]
+                }
+            }
         ],
         VisibleToAllUsers=True,
         JobFlowRole='EMR_EC2_DefaultRole',
@@ -126,7 +144,7 @@ def main():
     
     # create_bucket(s3_client, config['BUCKET']['CODE_BUCKET'])
 
-    # upload_etl(s3_client, 'etl.py', config['BUCKET']['CODE_BUCKET'])
+    upload_etl(s3_client, 'etl.py', config['BUCKET']['CODE_BUCKET'])
 
     emr_client = boto3.client(
             'emr',

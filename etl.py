@@ -40,17 +40,16 @@ def process_song_data(spark, input_data, output_data):
     # read song data file
     df = spark.read.json(song_data)
     
-    df.createOrReplaceTempView("songs")
-    
     # extract columns to create songs table
-    songs_table = spark.sql("SELECT distinct song_id, title, artist_id, year, duration FROM songs")
+    songs_table = df['song_id', 'title', 'artist_id', 'year', 'duration']
 
     # write songs table to parquet files partitioned by year and artist
     songs_table.write.partitionBy('year', 'artist_id').parquet(os.path.join(output_data, 'songs'),'overwrite') 
 
     # extract columns to create artists table
-    artists_table = spark.sql("SELECT distinct artist_id, artist_name, artist_location, artist_latitude, artist_longitude FROM songs")
-    
+    artists_table = df['artist_id', 'artist_name', 'artist_location', 'artist_latitude', 'artist_longitude']
+    artists_table = artists_table.drop_duplicates(subset=['artist_id'])
+
     # write artists table to parquet files
     artists_table.write.parquet(os.path.join(output_data, 'artists'),'overwrite')
 
@@ -73,10 +72,10 @@ def process_log_data(spark, input_data, output_data):
     
     # filter by actions for song plays
     df = df.filter(df.page == 'NextSong')
-    df.createOrReplaceTempView("logs")
     
     # extract columns for users table    
-    users_table = spark.sql("SELECT distinct userId, firstName, lastName, gender, level FROM logs")
+    users_table = df['userId', 'firstName', 'lastName', 'gender', 'level']
+    users_table = users_table.drop_duplicates(subset=['userId'])
   
     # write users table to parquet files
     users_table.write.parquet(os.path.join(output_data, 'users'),'overwrite')
@@ -103,25 +102,29 @@ def process_log_data(spark, input_data, output_data):
 
 
     # read in song data to use for songplays table
-    song_df = spark.sql("SELECT DISTINCT song_id, title, artist_id FROM songs")
+    song_data = os.path.join(input_data, "song_data/A/A/A/*.json")
+    song_df = spark.read.json(song_data)
+    song_df = song_df['song_id', 'title', 'artist_id', 'duration']
 
     # extract columns from joined song and log datasets to create songplays table 
-    df = spark.sql("SELECT datetime, userId, level, song, artist, sessionId, location, userAgent FROM logs")
-
+    df = df['datetime', 'userId', 'level', 'song', 'artist', 'sessionId', 'location', 'userAgent']
     joined_df = df.join(song_df, df.song == song_df.title)
-
+    
     songplays_table = joined_df.select(
         monotonically_increasing_id().alias('songplay_id'),
         col('datetime').alias('start_time'),
-        col('userId').alias('user_id'),
         year('datetime').alias('year'),
         month('datetime').alias('month'),
+        col('userId').alias('user_id'),
         'level',
         'song_id',
+        'song',
         'artist_id',
+        'artist',
         col('sessionId').alias('session_id'),
         'location',
-        col('userAgent').alias('user_agent')
+        col('userAgent').alias('user_agent'),
+        'duration'
     )
 
     # write songplays table to parquet files partitioned by year and month
@@ -149,23 +152,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
- {
-                'Name': 'Setup - copy files',
-                'ActionOnFailure': 'CANCEL_AND_WAIT',
-                'HadoopJarStep': {
-                    'Jar': 'command-runner.jar',
-                    'Args': ['aws', 's3', 'cp', 's3://' + config['BUCKET']['CODE_BUCKET'], '/home/hadoop/',
-                             '--recursive']
-                }
-            },
-            {
-                'Name': 'Run Spark',
-                'ActionOnFailure': 'CANCEL_AND_WAIT',
-                'HadoopJarStep': {
-                    'Jar': 'command-runner.jar',
-                    'Args': ['spark-submit', '/home/hadoop/etl.py',
-                             config['S3']['INPUT_DATA'], config['S3']['OUTPUT_DATA']]
-                }
-            }
-    
